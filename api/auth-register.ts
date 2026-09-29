@@ -1,4 +1,4 @@
-import { json, normalizeTanzaniaPhone, supabaseFirst, supabaseInsert, type VercelRequest, type VercelResponse } from '../src/lib/server';
+import { json, normalizeTanzaniaPhone, supabaseFirst, supabaseInsert, type VercelRequest, type VercelResponse } from '../src/lib/server.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return json(res, { success: false, message: 'Request method sio sahihi.' }, 405);

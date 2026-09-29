@@ -3,7 +3,7 @@ import {
   json, cycleValues, packageRedirect,
   supabaseFirst, supabaseUpdate,
   type VercelRequest, type VercelResponse,
-} from '../src/lib/server';
+} from '../src/lib/server.js';
 
 function env(name: string, fallback = '') { return (process.env[name] ?? fallback).trim(); }
 

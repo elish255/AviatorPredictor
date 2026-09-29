@@ -1,5 +1,5 @@
 declare const process: { env: Record<string, string | undefined> };
-import { json, cycleValues, supabaseFirst, supabaseUpdate, type VercelRequest, type VercelResponse } from '../src/lib/server';
+import { json, cycleValues, supabaseFirst, supabaseUpdate, type VercelRequest, type VercelResponse } from '../src/lib/server.js';
 
 function adminKey(body: Record<string, unknown>) {
   const key = String(body.key ?? '').trim();

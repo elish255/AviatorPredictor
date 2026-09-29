@@ -1,5 +1,5 @@
 declare const process: { env: Record<string, string | undefined> };
-import { json, supabaseFirst, supabaseInsert, supabaseUpdate, type VercelRequest, type VercelResponse } from '../src/lib/server';
+import { json, supabaseFirst, supabaseInsert, supabaseUpdate, type VercelRequest, type VercelResponse } from '../src/lib/server.js';
 function keyOk(body: Record<string,unknown>){return String(body.key??'') && String(body.key??'') === (process.env['ADMIN_ACCESS_KEY'] ?? '');}
 function appId(){return `AVIATOR-${Math.random().toString(36).slice(2,10).toUpperCase()}`;}
 export default async function handler(req: VercelRequest,res: VercelResponse){

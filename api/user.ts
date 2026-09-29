@@ -1,4 +1,4 @@
-import { json, supabaseFirst, type VercelRequest, type VercelResponse } from '../src/lib/server';
+import { json, supabaseFirst, type VercelRequest, type VercelResponse } from '../src/lib/server.js';
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const id = Number(req.query?.id ?? 0);
   if (!id) return json(res, { success: false, message: 'User hayupo.' }, 400);

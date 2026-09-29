@@ -1,5 +1,5 @@
 declare const process: { env: Record<string, string | undefined> };
-import { json, supabaseRequest, type VercelRequest, type VercelResponse } from '../src/lib/server';
+import { json, supabaseRequest, type VercelRequest, type VercelResponse } from '../src/lib/server.js';
 
 function allowed(req: VercelRequest) {
   const key = String(req.query?.key ?? '').trim();

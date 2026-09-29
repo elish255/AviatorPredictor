@@ -2,7 +2,7 @@ declare const process: { env: Record<string, string | undefined> };
 import {
   json, normalizeTanzaniaPhone, packageAmount, packageAllowed, packagePaid, packageRedirect,
   supabaseFirst, supabaseInsert, supabaseUpdate, type VercelRequest, type VercelResponse,
-} from '../src/lib/server';
+} from '../src/lib/server.js';
 
 function env(name: string, fallback = '') { return (process.env[name] ?? fallback).trim(); }
 
@@ -21,15 +21,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!user) return json(res, { success: false, status: 'ERROR', message: 'User hayupo.' }, 404);
     if (!packageAllowed(user, pkg)) return json(res, { success: false, status: 'ERROR', message: 'Hujaruhusiwa kulipia package hii.' }, 403);
     if (packagePaid(user, pkg)) return json(res, { success: true, status: 'ALREADY_PAID', message: 'Package hii tayari imelipiwa.', redirect: packageRedirect(pkg) });
+    const amount = packageAmount(pkg);
+    const currency = env('FIMIPAY_CURRENCY', 'TZS');
     const existing = await supabaseFirst('aviator_payments', { user_id: `eq.${userId}`, package_no: `eq.${pkg}`, status: `eq.pending`, order: 'created_at.desc' });
     if (existing?.order_id) return json(res, { success: true, status: 'PENDING', payment_status: String(existing.payment_status ?? 'PENDING'), order_id: String(existing.order_id), amount, currency });
-
-    const amount = packageAmount(pkg);
     const apiKey = env('FIMIPAY_API_KEY');
     if (!apiKey) return json(res, { success: false, status: 'ERROR', message: 'Payment configuration haijakamilika.' }, 500);
 
     const createUrl = env('FIMIPAY_CREATE_PAYMENT_URL', 'https://fimipay.com/api/v1/payment/create_order');
-    const currency = env('FIMIPAY_CURRENCY', 'TZS');
     const fallbackEmail = env('FIMIPAY_BUYER_EMAIL', 'customer@example.com');
     const buyerName = String(user.fullname ?? user.name ?? user.firstname ?? 'Customer').trim() || 'Customer';
     const buyerEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(user.email ?? '')) ? String(user.email) : fallbackEmail;
