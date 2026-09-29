@@ -1,73 +1,77 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
-import { allowed, clearUser, getCurrentUser, getSite, getUserId, loginWithPhone, packages, paid, registerWithPhone, saveBettingSite, type User } from './lib/app';
 
-const sites = [
-  ['1XBET', '/images/1xbet.svg'],
-  ['betway', '/images/betway.svg'],
-  ['Betika', '/images/betika.svg'],
-  ['MELBET', '/images/melbet.svg'],
-  ['888sport', '/images/888sport.svg'],
-  ['SportPesa', '/images/sportpesa.svg'],
-] as const;
+type Site = { name: string; image: string };
+type User = { id: string; phone: string; last_package: number; current_package: number; site_name?: string; site_image?: string };
+type Payment = { id: string; user_id: string; package_no: number; amount: number; status: string; order_id?: string };
 
-function go(path: string) { window.history.pushState({}, '', path); window.dispatchEvent(new PopStateEvent('popstate')); }
-function Layout({ children, back = true }: { children: React.ReactNode; back?: boolean }) {
-  return <div className="app-shell"><header className="topbar"><div className="topwrap">{back ? <button className="back-btn" onClick={() => window.history.back()}>‹</button> : <div className="back-space"/>}<div className="brand"><img src="/images/aviator-plane.svg" alt="Aviator"/><div><b>Aviator</b><span>Predictor</span></div></div><div className="back-space"/></div></header><main className="page">{children}</main></div>;
+const SITES: Site[] = [
+  ['1WINBET','1win.png'], ['SportyBet','sportybet.png'], ['BETWINNER','betwinner.png'], ['PREMIER Bet','premierbet.png'],
+  ['Betpawa','betpawa.png'], ['WasafiBet','wasafibet.png'], ['BetKing','betking.png'], ['1XBet','1xbet.png'],
+  ['Gwalabet','gwalabet.png'], ['Sportsbet','sportsbet.png'], ['Bet365','bet365.png'], ['sportpesa','sportpesa.png']
+].map(([name,image]) => ({name,image:`/images/${image}`}));
+const PACKAGES = [
+  {no:1, amount:10000}, {no:2, amount:15000}, {no:3, amount:25000}
+];
+const api = async (url:string, body:unknown) => {
+  const headers:Record<string,string>={'Content-Type':'application/json'};
+  const token=localStorage.getItem('aviator_session'); if(token) headers['x-session-token']=token;
+  const r = await fetch(url,{method:'POST',headers,body:JSON.stringify(body)});
+  const data = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.message || 'Request failed');
+  return data;
+};
+const money=(n:number)=>`TZS ${n.toLocaleString('en-TZ')}`;
+const normalizePhone=(v:string)=>{let p=v.replace(/\D/g,''); if(p.startsWith('0')) p='255'+p.slice(1); if(p.startsWith('255')) return p; return p.length===9?'255'+p:p;};
+
+function App(){
+  const [path,setPath]=useState(window.location.pathname);
+  const [user,setUser]=useState<User|null>(()=>{try{return JSON.parse(localStorage.getItem('aviator_user')||'null')}catch{return null}});
+  const [site,setSite]=useState<Site|null>(()=>{try{return JSON.parse(localStorage.getItem('aviator_site')||'null')}catch{return null}});
+  const [loading,setLoading]=useState(false);
+  const go=(p:string)=>{history.pushState({},'',p);setPath(p);window.scrollTo(0,0)};
+  useEffect(()=>{const h=()=>setPath(window.location.pathname);addEventListener('popstate',h);return()=>removeEventListener('popstate',h)},[]);
+  const refreshUser=async(phone?:string)=>{
+    if(!phone) return;
+    const r=await api('/api/auth-login',{phone}); setUser(r.user); localStorage.setItem('aviator_user',JSON.stringify(r.user)); localStorage.setItem('aviator_session',r.token);
+  };
+  const selectSite=async(s:Site)=>{setSite(s);localStorage.setItem('aviator_site',JSON.stringify(s)); if(user){try{await api('/api/save-site',{user_id:user.id,site_name:s.name,site_image:s.image})}catch{}} go('/connecting')};
+  const start=()=>go(user?'/sites':'/register');
+  if(path==='/') return <Home onStart={start}/>;
+  if(path==='/register') return <Register loading={loading} setLoading={setLoading} onDone={(u)=>{setUser(u);localStorage.setItem('aviator_user',JSON.stringify(u));go('/login')}} onLogin={()=>go('/login')}/>;
+  if(path==='/login') return <Login loading={loading} setLoading={setLoading} onDone={(u)=>{setUser(u);localStorage.setItem('aviator_user',JSON.stringify(u));go('/sites')}} onRegister={()=>go('/register')}/>;
+  if(path==='/sites') return <Sites sites={SITES} selected={site} onSelect={selectSite}/>;
+  if(path==='/connecting') return <Connecting site={site} onDone={()=>go('/dashboard')}/>;
+  if(path.startsWith('/package')) return <PaymentPage user={user} packageNo={Number(path.replace('/package',''))||1} onBack={()=>go('/dashboard')} onRefresh={refreshUser}/>;
+  if(path==='/dashboard') return <Dashboard user={user} site={site} onNext={async()=>{if(!user){go('/login');return} try{setLoading(true);const r=await api('/api/auth-login',{phone:user.phone});setUser(r.user);localStorage.setItem('aviator_user',JSON.stringify(r.user));localStorage.setItem('aviator_session',r.token);const next=r.user.current_package;go(`/package${next}`)}catch{go('/login')}finally{setLoading(false)}}} />;
+  if(path==='/control') return <Control/>;
+  return <Home onStart={start}/>;
 }
 
-function Home() {
-  return <div className="home-screen"><div className="home-glow"/><div className="home-brand"><img src="/images/aviator-plane.svg" alt="Aviator"/><h1>Aviator</h1><h2>Predictor</h2></div><p className="home-tagline">Smart Predictions<br/>Better Chances</p><div className="hero-plane"><img src="/images/aviator-plane.svg" alt=""/></div><button className="primary-btn home-start" onClick={() => go('/register')}>START NOW</button><button className="home-login" onClick={() => go('/login')}>INGIA</button></div>;
+function Shell({children}:{children:React.ReactNode}){return <div className="app-shell">{children}</div>}
+function Home({onStart}:{onStart:()=>void}){return <Shell><main className="home"><div className="home-glow"/><img className="home-logo" src="/images/aviator.png"/><h1>Aviator</h1><h2>Predictor</h2><p>Smart Predictions<br/>Better Chances</p><div className="red-line"/><img className="home-plane" src="/images/plane.png"/><button className="primary home-btn" onClick={onStart}>Start Now</button></main></Shell>}
+
+function Register({onDone,onLogin,loading,setLoading}:{onDone:(u:User)=>void;onLogin:()=>void;loading:boolean;setLoading:(v:boolean)=>void}){
+ const [phone,setPhone]=useState(''); const submit=async()=>{const p=normalizePhone(phone);if(p.length!==12)return alert('Weka namba sahihi ya simu');try{setLoading(true);const r=await api('/api/auth-register',{phone:p});localStorage.setItem('aviator_session',r.token);onDone(r.user)}catch(e){alert((e as Error).message)}finally{setLoading(false)}};
+ return <Shell><div className="auth-card"><img src="/images/aviator.png" className="auth-logo"/><h1>Jisajili</h1><p>Weka namba yako ya simu<br/>kuunda akaunti yako</p><input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Namba ya simu (e.g. 2556XXXXXXXX)" inputMode="tel"/><button className="primary" disabled={loading} onClick={submit}>{loading?'Inasubiri...':'Jisajili'}</button><div className="auth-foot">Tayari una akaunti? <button onClick={onLogin}>Ingia</button></div></div></Shell>
+}
+function Login({onDone,onRegister,loading,setLoading}:{onDone:(u:User)=>void;onRegister:()=>void;loading:boolean;setLoading:(v:boolean)=>void}){
+ const [phone,setPhone]=useState(''); const submit=async()=>{const p=normalizePhone(phone);try{setLoading(true);const r=await api('/api/auth-login',{phone:p});localStorage.setItem('aviator_session',r.token);onDone(r.user)}catch(e){alert((e as Error).message)}finally{setLoading(false)}};
+ return <Shell><div className="auth-card"><img src="/images/aviator.png" className="auth-logo"/><h1>Ingia</h1><p>Weka namba yako ya simu</p><input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Namba ya simu" inputMode="tel"/><button className="primary" disabled={loading} onClick={submit}>{loading?'Inasubiri...':'Ingia'}</button><div className="auth-foot">Huna akaunti? <button onClick={onRegister}>Jisajili</button></div></div></Shell>
+}
+function Sites({sites,onSelect}:{sites:Site[];selected:Site|null;onSelect:(s:Site)=>void}){return <Shell><div className="site-page"><div className="page-head"><button className="back" onClick={()=>history.back()}>‹</button><div><h1>Chagua Betting Site</h1><p>Chagua tovuti yako ya kubeti</p></div></div><div className="site-grid">{sites.map(s=><button className="site-card" key={s.name} onClick={()=>onSelect(s)}><div className="site-img"><img src={s.image} alt={s.name}/></div><span>{s.name}</span></button>)}</div><button className="primary" disabled>Endelea</button></div></Shell>}
+function Connecting({site,onDone}:{site:Site|null;onDone:()=>void}){useEffect(()=>{const t=setTimeout(onDone,2200);return()=>clearTimeout(t)},[]);return <Shell><div className="connecting"><div className="ring"><img src="/images/aviator.png"/></div><h1>Connecting to your site...</h1><p>Tafadhali subiri, tunaunganisha<br/>na tovuti yako ya kubeti.</p><div className="connect-site">{site&&<img src={site.image} alt=""/>}<b>{site?.name||''}</b></div></div></Shell>}
+function Dashboard({user,site,onNext}:{user:User|null;site:Site|null;onNext:()=>void}){return <Shell><div className="dashboard"><header className="dash-head"><div className="menu">☰</div><img src="/images/aviator2.png"/><div className="menu">☰</div></header><div className="user-pill"><div className="avatar">●</div><div><b>+{user?.phone||''}</b><small>● Connected</small></div></div><div className="predictor"><div className="circle"><span>1x00</span></div><button className="primary" onClick={onNext}>Next odd</button></div><div className="connected-box"><small>Connected Site</small>{site&&<div><img src={site.image} alt={site.name}/><b>{site.name}</b></div>}</div><nav><button className="active">⌂<span>Home</span></button><button>◷<span>History</span></button><button>♙<span>Profile</span></button></nav></div></Shell>}
+
+function PaymentPage({user,packageNo,onBack,onRefresh}:{user:User|null;packageNo:number;onBack:()=>void;onRefresh:(phone?:string)=>Promise<void>}){
+ const pkg=PACKAGES.find(x=>x.no===packageNo)||PACKAGES[0]; const [phone,setPhone]=useState(user?.phone||''); const [status,setStatus]=useState<'idle'|'waiting'|'success'|'cancelled'|'failed'>('idle'); const [orderId,setOrderId]=useState(''); const [busy,setBusy]=useState(false);
+ useEffect(()=>{if(user?.phone)setPhone(user.phone)},[user?.phone]);
+ useEffect(()=>{if(!orderId)return; const timer=setInterval(async()=>{try{const r=await api('/api/payment-status',{order_id:orderId}); const s=String(r.payment_status||'').toUpperCase(); if(s==='SUCCESS'){clearInterval(timer);setStatus('success');await onRefresh(user?.phone);setTimeout(()=>window.history.pushState({},'',`/package${Math.min(packageNo+1,4)}`),0);setTimeout(()=>{if(packageNo<3)location.pathname=`/package${packageNo+1}`;else location.pathname='/dashboard'},500)} else if(['CANCELLED','USERCANCELLED'].includes(s)){clearInterval(timer);setStatus('cancelled');setTimeout(onBack,700)} else if(['REJECTED'].includes(s)){clearInterval(timer);setStatus('failed')}}catch{}},2500);return()=>clearInterval(timer)},[orderId]);
+ const pay=async()=>{try{setBusy(true);setStatus('idle');const r=await api('/api/payment-create',{user_id:user?.id,package_no:packageNo,phone:normalizePhone(phone),amount:pkg.amount});setOrderId(r.order_id);setStatus('waiting')}catch(e){alert((e as Error).message)}finally{setBusy(false)}};
+ return <Shell><div className="pay-page"><button className="back" onClick={onBack}>‹</button><div className="pay-card"><div className="pay-title">Package {packageNo}</div><div className="price">{money(pkg.amount)}</div><p>Lipa ili uendelee</p><label>Namba ya simu</label><input value={phone} onChange={e=>setPhone(e.target.value)} inputMode="tel" placeholder="2556XXXXXXXX"/><button className="primary" disabled={busy||status==='waiting'} onClick={pay}>{status==='waiting'?'Inasubiri uthibitisho...':busy?'Inaanzisha...':'Lipa Sasa'}</button>{status==='waiting'&&<div className="waiting"><div className="mini-ring"/> <b>Inasubiri uthibitisho...</b><span>Thibitisha ombi kwenye simu yako.</span><button className="secondary" onClick={()=>{setOrderId('');setStatus('cancelled');onBack()}}>Cancel</button></div>}{status==='success'&&<div className="success">Malipo yamefanikiwa. Tunaendelea...</div>}{status==='cancelled'&&<div className="cancel">Malipo yameghairiwa. <button onClick={onBack}>Rudi Dashboard</button></div>}{status==='failed'&&<div className="cancel">Malipo hayakukamilika. Jaribu tena.</div>}<small className="secure">🔒 Malipo yako yana salama</small></div></div></Shell>
 }
 
-function Register() {
-  const [phone, setPhone] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  async function submit(e: React.FormEvent) { e.preventDefault(); setBusy(true); setError(''); try { await registerWithPhone(phone); go('/betting-site'); } catch (err) { setError(err instanceof Error ? err.message : 'Kuna tatizo.'); } finally { setBusy(false); } }
-  return <Layout><section className="auth-screen"><div className="auth-logo"><img src="/images/aviator-plane.svg" alt=""/><h1>Jisajili</h1></div><p className="auth-sub">Weka namba yako ya simu<br/>kuunda akaunti yako</p>{error && <div className="error">{error}</div>}<form onSubmit={submit} className="dark-form"><label>☎ &nbsp; Namba ya simu</label><input value={phone} onChange={e=>setPhone(e.target.value.replace(/\D/g,''))} placeholder="2556XXXXXXXX" maxLength={12} inputMode="numeric" required/><button className="primary-btn" disabled={busy}>{busy?'INASAJILI...':'JISAJILI'}</button></form><p className="auth-switch">Tayari una akaunti? <button type="button" onClick={()=>go('/login')}>Ingia</button></p></section></Layout>;
-}
+function Control(){const [key,setKey]=useState('');const [rows,setRows]=useState<Payment[]>([]);const load=async()=>{try{const r=await api('/api/payment-list',{key});setRows(r.payments||[])}catch(e){alert((e as Error).message)}};const mark=async(id:string)=>{try{await api('/api/payment-admin',{key,payment_id:id});await load()}catch(e){alert((e as Error).message)}};return <Shell><div className="control"><h1>Payment Control</h1><input placeholder="Control key" value={key} onChange={e=>setKey(e.target.value)}/><button className="primary" onClick={load}>Open</button><div className="table">{rows.map(r=><div className="row" key={r.id}><span>Package {r.package_no}<br/>{money(r.amount)}</span><b>{r.status}</b><button onClick={()=>mark(r.id)}>Mark Paid</button></div>)}</div></div></Shell>}
 
-function Login() {
-  const [phone, setPhone] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  async function submit(e: React.FormEvent) { e.preventDefault(); setBusy(true); setError(''); try { await loginWithPhone(phone); go('/betting-site'); } catch (err) { setError(err instanceof Error ? err.message : 'Kuna tatizo.'); } finally { setBusy(false); } }
-  return <Layout><section className="auth-screen"><div className="auth-logo"><img src="/images/aviator-plane.svg" alt=""/><h1>Ingia</h1></div><p className="auth-sub">Weka namba yako ya simu<br/>kuendelea na akaunti yako</p>{error && <div className="error">{error}</div>}<form onSubmit={submit} className="dark-form"><label>☎ &nbsp; Namba ya simu</label><input value={phone} onChange={e=>setPhone(e.target.value.replace(/\D/g,''))} placeholder="2556XXXXXXXX" maxLength={12} inputMode="numeric" required/><button className="primary-btn" disabled={busy}>{busy?'INASOMA...':'INGIA'}</button></form><p className="auth-switch">Huna akaunti? <button type="button" onClick={()=>go('/register')}>Jisajili</button></p></section></Layout>;
-}
-
-function BettingSite() {
-  const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  useEffect(() => { if (!getUserId()) go('/login'); }, []);
-  async function choose(name: string, image: string) { if (busy) return; setBusy(true); setError(''); try { await saveBettingSite(name, image); go('/loading'); } catch (e) { setError(e instanceof Error ? e.message : 'Connection Error'); setBusy(false); } }
-  return <Layout><section className="sites-screen"><h1>Chagua Betting Site</h1><p>Chagua tovuti yako ya kubeti</p>{error && <div className="error">{error}</div>}<div className="site-grid">{sites.map(([name,img]) => <button key={name} className="site-card" disabled={busy} onClick={() => choose(name,img)}><img src={img} alt={name}/><span>{name}</span></button>)}</div><button className="primary-btn sites-next" disabled>{busy?'Inaunganisha...':'Endelea'}</button></section></Layout>;
-}
-
-function Loading() { const site = getSite(); useEffect(() => { const t=setTimeout(()=>go('/dashboard'),2500); return ()=>clearTimeout(t); },[]); return <div className="connecting-screen"><img className="connecting-plane" src="/images/aviator-plane.svg" alt=""/><h1>Connecting to your site...</h1><p>Tafadhali subiri, tunaunganisha<br/>na tovuti yako ya kubeti.</p>{site.name && <div className="connecting-site"><img src={site.image || '/images/1xbet.svg'} alt={site.name}/><span>{site.name}</span></div>}<div className="connect-ring"><span>↗</span></div></div>; }
-
-function Dashboard({ user }: { user: User }) {
-  const site=getSite();
-  const next = !paid(user,1)?1:!paid(user,2)?2:!paid(user,3)?3:1;
-  return <Layout back={false}><div className="dashboard-screen"><section className="user-strip"><div className="avatar">👤</div><div><b>{user.phone}</b><span>🟢 Connected</span></div><button onClick={()=>go('/logout')}>⋮</button></section><section className="odds-card"><div className="odds-icon">☎</div><div className="fixed-odd">1x00</div><img src="/images/aviator-plane.svg" alt=""/><button className="primary-btn" onClick={()=>go(`/package${next}`)}>Next odd</button></section><section className="connected-site-card"><h3>Connected Site</h3><div className="connected-site-row">{site.image ? <img src={site.image} alt={site.name}/> : <div className="site-fallback">{site.name?.slice(0,1)}</div>}<div><b>{site.name}</b><span>Connected</span></div></div></section><nav className="bottom-nav"><button className="active">⌂<span>Home</span></button><button>◷<span>History</span></button><button>♙<span>Profile</span></button></nav></div></Layout>;
-}
-
-function PackagePage({ user, pkg }: { user: User; pkg: 1|2|3 }) {
-  const info=packages[pkg]; const [phone,setPhone]=useState(String(user.phone??'')); const [busy,setBusy]=useState(false); const [error,setError]=useState('');
-  useEffect(()=>{ if (!allowed(user,pkg)) { go(pkg===2?'/package1':pkg===3?'/package2':'/dashboard'); return; } if(paid(user,pkg)) go(pkg===1?'/package2':pkg===2?'/package3':'/dashboard'); },[user,pkg]);
-  async function pay(e: React.FormEvent){e.preventDefault(); if(busy)return; setBusy(true);setError(''); try { const r=await fetch('/api/payment-create',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({userId:getUserId(),package:pkg,phone})}); const data=await r.json(); if(data.status==='ALREADY_PAID'){go(data.redirect||'/dashboard');return;} if(data.success && data.order_id){go(`/waiting?order=${encodeURIComponent(data.order_id)}`);return;} throw new Error(data.message||'Imeshindikana kuanzisha malipo.'); } catch(e){setError(e instanceof Error?e.message:'Kuna tatizo la server.');setBusy(false);} }
-  return <Layout><section className="access-screen"><div className="access-top"><button onClick={()=>go('/dashboard')}>‹</button><h2>Lipia Access</h2><span>🔒</span></div><div className="access-card"><small>{info.name}</small><h1>{info.title}</h1><div className="access-price">TSh {info.amount.toLocaleString()}</div><p>{info.description}</p><ul>{info.features.map(f=><li key={f}>✓ {f}</li>)}</ul></div><form className="dark-form payment-form" onSubmit={pay}>{error&&<div className="error">{error}</div>}<label>Namba ya simu</label><input type="tel" value={phone} onChange={e=>setPhone(e.target.value.replace(/\D/g,''))} placeholder="2556XXXXXXXX" maxLength={12} inputMode="numeric" required/><button className="primary-btn" disabled={busy}>{busy?'Inatuma...':'LIPA SASA'}</button><div className="secure-note">🔒 Malipo yako yanalindwa</div></form></section></Layout>;
-}
-
-function Waiting() {
-  const order=new URLSearchParams(location.search).get('order')||''; const [state,setState]=useState<'pending'|'success'|'failed'|'error'>('pending'); const [message,setMessage]=useState('Inaangalia malipo...');
-  useEffect(()=>{if(!order){setState('error');setMessage('Order haijapatikana.');return;} let stopped=false; const check=async()=>{try{const r=await fetch(`/api/payment-status?order_id=${encodeURIComponent(order)}&userId=${getUserId()}&_=${Date.now()}`,{cache:'no-store'});const d=await r.json(); if(stopped)return; if(d.status==='SUCCESS' && d.payment_status==='SUCCESS'){setState('success');setMessage('Malipo yamefanikiwa!');stopped=true;setTimeout(()=>go(d.redirect||'/dashboard'),700);return;} if(d.status==='FAILED'){setState('failed');setMessage('Malipo hayajakamilika.');stopped=true;setTimeout(()=>go('/dashboard'),900);return;} setState('pending');setMessage('⏳ Inasubiri uthibitisho wa malipo...');}catch{if(!stopped){setState('pending');setMessage('⏳ Inasubiri uthibitisho wa malipo...')}}}; check(); const t=setInterval(check,3000); return()=>{stopped=true;clearInterval(t)}},[order]);
-  return <div className="connecting-screen wait-screen"><div className="wait-icon">{state==='success'?'✓':state==='failed'?'↩':'💳'}</div>{state==='pending'&&<div className="big-spinner"/>}<h2>{state==='success'?'Malipo Yamefanikiwa':state==='failed'?'Malipo Hayajakamilika':'Inasubiri Malipo'}</h2><p>{state==='success'?'Unaelekezwa kwenye hatua inayofuata...':'Tafadhali thibitisha ombi la malipo kwenye simu yako.'}</p><div className={`status ${state}`}>{message}</div></div>;
-}
-
-function ControlPanel() {
-  const [key,setKey]=useState(sessionStorage.getItem('aviator_control_key')||''); const [rows,setRows]=useState<any[]>([]); const [msg,setMsg]=useState(''); const [busy,setBusy]=useState(false);
-  async function load(){setMsg(''); const r=await fetch(`/api/payment-list?key=${encodeURIComponent(key)}`,{cache:'no-store'}); const d=await r.json().catch(()=>null); if(!r.ok||!d?.success){setMsg(d?.message||'Imeshindikana kusoma malipo.');return;} sessionStorage.setItem('aviator_control_key',key);setRows(d.rows||[])}
-  async function markPaid(paymentId:string){if(busy)return;setBusy(true);const r=await fetch('/api/payment-admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,paymentId})});const d=await r.json().catch(()=>null);setBusy(false);if(!r.ok||!d?.success){alert(d?.message||'Imeshindikana.');return;} await load()}
-  return <Layout><section className="control-screen"><h2>Payment Control</h2><input value={key} onChange={e=>setKey(e.target.value)} placeholder="Access key" type="password"/><button className="primary-btn" onClick={load}>FUNGUA</button>{msg&&<div className="error">{msg}</div>}<div className="admin-list">{rows.map(r=><div className="admin-row" key={r.id}><b>{r.user?.full_name??'User'}</b><span>{r.user?.phone??r.payment_phone} • Package {r.package_no} • TSh {Number(r.amount||0).toLocaleString()}</span><small>{r.status} / {r.payment_status}</small>{r.status!=='paid'&&<button disabled={busy} onClick={()=>markPaid(String(r.id))}>MARK SUCCESSFUL</button>}</div>)}</div></section></Layout>;
-}
-
-function App(){ const [path,setPath]=useState(location.pathname); const [user,setUser]=useState<User|null>(null); const [loading,setLoading]=useState(true); useEffect(()=>{const f=()=>{setPath(location.pathname);getCurrentUser().then(setUser)}; addEventListener('popstate',f); getCurrentUser().then(setUser).finally(()=>setLoading(false)); return()=>removeEventListener('popstate',f)},[]); if(loading)return <div className="connecting-screen"><div className="big-spinner"/></div>; if(path==='/logout'){clearUser();go('/login');return null;} if(path==='/')return <Home/>; if(path==='/login')return <Login/>; if(path==='/register')return <Register/>; if(path==='/control')return <ControlPanel/>; if(path==='/waiting')return <Waiting/>; if(path==='/betting-site'){if(!user){go('/login');return null;}return <BettingSite/>;} if(path==='/loading'){if(!user){go('/login');return null;}return <Loading/>;} if(path==='/dashboard'){if(!user){go('/login');return null;}return <Dashboard user={user}/>;} const match=path.match(/^\/package([123])$/); if(match){if(!user){go('/login');return null;}return <PackagePage user={user} pkg={Number(match[1]) as 1|2|3}/>;} go('/'); return null; }
-
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
+createRoot(document.getElementById('root')!).render(<App/>);
