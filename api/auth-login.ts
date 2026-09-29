@@ -1,18 +1,2 @@
-import { json, supabaseFirst, supabaseUpdate, type VercelRequest, type VercelResponse } from '../src/lib/server.js';
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') return json(res, { success: false, message: 'Request method sio sahihi.' }, 405);
-  try {
-    const body = (req.body ?? {}) as Record<string, unknown>;
-    const phone = String(body.phone ?? '').replace(/[^0-9]/g, '');
-    if (!/^0[67][0-9]{8}$/.test(phone)) return json(res, { success: false, message: 'Tafadhali ingiza namba sahihi ya simu, mfano 0712345678.' }, 400);
-    const normalized = `255${phone.slice(1)}`;
-    const user = await supabaseFirst('aviator_users', { or: `(phone.eq.${phone},phone.eq.${normalized})` });
-    if (!user) return json(res, { success: false, message: 'Account haipo. Tafadhali jisajili kwanza.' }, 404);
-    const updated = await supabaseUpdate('aviator_users', { id: `eq.${user.id}` }, { last_login_at: new Date().toISOString(), last_page: '/betting-site' });
-    return json(res, { success: true, user: Array.isArray(updated) && updated[0] ? updated[0] : user });
-  } catch (error) {
-    console.error(error);
-    return json(res, { success: false, message: 'Imeshindikana kuwasiliana na database.' }, 500);
-  }
-}
+import {sb,json,phone} from './_supabase';
+export default async function handler(req:Request){if(req.method!=='POST')return json({message:'Method not allowed'},405);try{const b:any=await req.json();const p=phone(b.phone);const rows=await sb(`aviator_users?phone=eq.${encodeURIComponent(p)}&select=*&limit=1`);if(!rows?.[0])return json({message:'Namba haijasajiliwa'},404);const user=rows[0];const token=crypto.randomUUID()+crypto.randomUUID().replaceAll('-','');await sb('aviator_sessions',{method:'POST',body:JSON.stringify({token,user_id:user.id,expires_at:new Date(Date.now()+1000*60*60*24*30).toISOString()})});return json({user,token});}catch(e:any){return json({message:e.message||'Imeshindikana kuingia'},500)}}
