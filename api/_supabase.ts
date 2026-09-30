@@ -19,10 +19,32 @@ function env(name: string) {
 
 function config() {
   const url = (env('SUPABASE_URL') || env('VITE_SUPABASE_URL')).replace(/\/$/, '');
-  const key = env('SUPABASE_SERVICE_ROLE_KEY') || env('SUPABASE_SECRET_KEY') || env('SUPABASE_SERVICE_KEY');
+  // Server APIs must use a server-side secret/service key, never the frontend
+  // publishable/anon key.
+  const secret = env('SUPABASE_SECRET_KEY');
+  const service = env('SUPABASE_SERVICE_ROLE_KEY') || env('SUPABASE_SERVICE_KEY');
+  const key = secret || service;
 
   if (!url) throw new Error('Supabase URL is missing. Set SUPABASE_URL in Vercel Production environment variables.');
-  if (!key) throw new Error('Supabase server key is missing. Set SUPABASE_SERVICE_ROLE_KEY in Vercel Production environment variables.');
+  if (!key) throw new Error('Supabase server key is missing. Set SUPABASE_SECRET_KEY (preferred) or SUPABASE_SERVICE_ROLE_KEY in Vercel Production environment variables.');
+
+  if (key.startsWith('sb_publishable_') || key.startsWith('sb_anon_')) {
+    throw new Error('Wrong Supabase key: a publishable/anon key was supplied to the server. Use SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY in Vercel Production.');
+  }
+
+  // Reject a JWT explicitly carrying the anon/authenticated role.
+  try {
+    const parts = key.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+      if (payload?.role === 'anon' || payload?.role === 'authenticated') {
+        throw new Error('Wrong Supabase key: the server received an anon/authenticated JWT. Use the Supabase Secret/Service Role key.');
+      }
+    }
+  } catch (e: any) {
+    if (String(e?.message || '').startsWith('Wrong Supabase key:')) throw e;
+    // Non-JWT secret keys are valid; ignore JWT parsing failures.
+  }
 
   return { url, key };
 }
