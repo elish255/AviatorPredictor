@@ -1,4 +1,4 @@
-import {sb,json,requireSession} from './_supabase';
+import {sb,json,requireSession} from './_supabase.js';
 const STATUS_URL=process.env.FIMIPAY_ORDER_STATUS_URL||'https://fimipay.com/api/v1/payment/order_status';
 const API_KEY=process.env.FIMIPAY_API_KEY||'';
 async function advance(uid:string,pkg:number){const next=pkg>=3?1:pkg+1;await sb(`aviator_users?id=eq.${encodeURIComponent(uid)}`,{method:'PATCH',body:JSON.stringify({current_package:next,last_package:pkg})});}

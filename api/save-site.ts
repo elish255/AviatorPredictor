@@ -1,2 +1,2 @@
-import {sb,json,requireSession} from './_supabase';
+import {sb,json,requireSession} from './_supabase.js';
 export default async function handler(req:Request){if(req.method!=='POST')return json({message:'Method not allowed'},405);try{const uid=await requireSession(req);const b:any=await req.json();await sb(`aviator_users?id=eq.${encodeURIComponent(uid)}`,{method:'PATCH',body:JSON.stringify({site_name:String(b.site_name||''),site_image:String(b.site_image||'')})});return json({ok:true});}catch(e:any){return json({message:e.message||'Imeshindikana kuhifadhi site'},400)}}

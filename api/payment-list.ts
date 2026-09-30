@@ -1,2 +1,2 @@
-import {sb,json} from './_supabase';
+import {sb,json} from './_supabase.js';
 export default async function handler(req:Request){if(req.method!=='POST')return json({message:'Method not allowed'},405);try{const b:any=await req.json();if(!process.env.ADMIN_PANEL_KEY||String(b.key)!==process.env.ADMIN_PANEL_KEY)return json({message:'Access denied'},403);const rows=await sb('aviator_payments?select=*&order=created_at.desc&limit=100');return json({payments:rows});}catch(e:any){return json({message:e.message||'Imeshindikana'},400)}}

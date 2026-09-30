@@ -1,4 +1,4 @@
-import {sb,json,phone,requireSession} from './_supabase';
+import {sb,json,phone,requireSession} from './_supabase.js';
 const CREATE_URL=process.env.FIMIPAY_CREATE_PAYMENT_URL||'https://fimipay.com/api/v1/payment/create_order';
 const API_KEY=process.env.FIMIPAY_API_KEY||'';
 const prices:Record<number,number>={1:2000,2:3000,3:5000};
