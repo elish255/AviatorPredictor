@@ -5,7 +5,8 @@ const STATUS_URL = process.env.FIMIPAY_ORDER_STATUS_URL || 'https://fimipay.com/
 const API_KEY = process.env.FIMIPAY_API_KEY || '';
 
 async function advance(uid: string, pkg: number) {
-  const next = pkg >= 3 ? 1 : pkg + 1;
+  // Package 1 -> 2, Package 2 -> 3, Package 3 -> dashboard/completed state (4).
+  const next = pkg >= 3 ? 4 : pkg + 1;
   // Make advancement idempotent. If FimiPay/Supabase already marked the
   // payment SUCCESS, this still makes sure the user's current package moves on.
   const rows = await sb(`aviator_users?id=eq.${encodeURIComponent(uid)}&select=id,current_package&limit=1`);
@@ -49,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // IMPORTANT: even when our DB already says SUCCESS, advance the package
     // if an earlier request did not complete the user update.
-    if (String(pay.status).toUpperCase() === 'SUCCESS') {
+    if (['SUCCESS', 'COMPLETED', 'PAID'].includes(String(pay.status).toUpperCase())) {
       const nextPackage = await advance(uid, Number(pay.package_no));
       return json(res, { payment_status: 'SUCCESS', next_package: nextPackage });
     }
@@ -70,19 +71,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try { data = JSON.parse(raw); } catch { data = { message: raw }; }
     if (!r.ok) return json(res, { message: data?.message || 'Imeshindikana kuangalia malipo' }, 400);
 
-    const status = String(data?.data?.payment_status || data?.payment_status || 'PENDING').toUpperCase();
+    const rawStatus = String(data?.data?.payment_status || data?.payment_status || 'PENDING').toUpperCase();
+    // FimiPay can report a successful completed payment as COMPLETED.
+    // Normalize all terminal-success states for the frontend while keeping
+    // the provider's actual status in our database.
+    const success = ['SUCCESS', 'COMPLETED', 'PAID'].includes(rawStatus);
     await sb(`aviator_payments?id=eq.${encodeURIComponent(pay.id)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ status: rawStatus })
     });
 
     let nextPackage: number | undefined;
-    if (status === 'SUCCESS') {
+    if (success) {
       nextPackage = await advance(uid, Number(pay.package_no));
     }
 
     return json(res, {
-      payment_status: status,
+      payment_status: success ? 'SUCCESS' : rawStatus,
       ...(nextPackage ? { next_package: nextPackage } : {})
     });
   } catch (e: any) {
