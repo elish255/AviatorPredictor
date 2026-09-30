@@ -6,9 +6,12 @@ function env(name: string): string {
 }
 
 export function supabaseConfig() {
-  const url = env('SUPABASE_URL');
-  const key = env('SUPABASE_PUBLISHABLE_KEY');
-  if (!url || !key) throw new Error('Database configuration is missing.');
+  const url = env('SUPABASE_URL') || env('VITE_SUPABASE_URL');
+  const key = env('SUPABASE_SECRET_KEY') || env('SUPABASE_SERVICE_ROLE_KEY') || env('SUPABASE_SERVICE_KEY');
+  if (!url || !key) throw new Error('Server database configuration is missing. Set SUPABASE_URL and SUPABASE_SECRET_KEY (preferred) or SUPABASE_SERVICE_ROLE_KEY.');
+  if (key.startsWith('sb_publishable_') || key.startsWith('sb_anon_')) {
+    throw new Error('Wrong Supabase server key: use SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY.');
+  }
   return { url: url.replace(/\/$/, ''), key };
 }
 
