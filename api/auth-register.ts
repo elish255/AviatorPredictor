@@ -14,25 +14,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const found = await sb(`aviator_users?phone=eq.${encodeURIComponent(p)}&select=*&limit=1`);
     if (found?.[0]) return json(res, { message: 'Namba hii tayari imesajiliwa. Ingia kwa namba hiyo.' }, 409);
 
-    // Supports both project schemas: the current UUID schema has no full_name;
-    // an older bigint schema requires it. We only retry when Supabase explicitly
-    // reports the missing required column/value.
-    let rows: any[];
-    try {
-      rows = await sb('aviator_users', {
-        method: 'POST',
-        headers: { Prefer: 'return=representation' },
-        body: JSON.stringify({ phone: p, current_package: 1 }),
-      });
-    } catch (e: any) {
-      const msg = safeMessage(e).toLowerCase();
-      if (!msg.includes('full_name') && !msg.includes('null value in column')) throw e;
-      rows = await sb('aviator_users', {
-        method: 'POST',
-        headers: { Prefer: 'return=representation' },
-        body: JSON.stringify({ full_name: String(b.full_name || b.name || p), phone: p, current_package: 1 }),
-      });
-    }
+    const fullName = String(b.full_name || b.name || '').trim().replace(/\s+/g, ' ');
+    if (fullName.length < 2) return json(res, { message: 'Weka jina lako kamili' }, 400);
+    if (fullName.length > 100) return json(res, { message: 'Jina ni refu sana' }, 400);
+
+    const rows = await sb('aviator_users', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ full_name: fullName, phone: p, current_package: 1 }),
+    });
 
     const user = rows?.[0];
     if (!user) return json(res, { message: 'Imeshindikana kuunda account.' }, 500);
