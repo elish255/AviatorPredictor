@@ -17,3 +17,9 @@ Optional Vercel Production variables:
 If FimiPay has a different exact method identifier enabled for your merchant
 account, set FIMIPAY_METHOD to that identifier. Do not put API keys in source.
 FIMIPAY_API_KEY remains a server-side Vercel environment variable.
+
+
+## Full Name + phone login fix
+The registration page now asks for **Full Name** and **phone number**. Login continues to use the **phone number only**. The payment request sends the registered user's full name as FimiPay `account_name`; if a user record has no name, the server falls back to `FIMIPAY_ACCOUNT_NAME`, whose default is `SmarkSoko`.
+
+Before deploying/testing a new registration, run `ADD_FULL_NAME_TO_AVIATOR_USERS.sql` once in Supabase SQL Editor. This migration only adds the `full_name` column and does not delete existing users or payment data.

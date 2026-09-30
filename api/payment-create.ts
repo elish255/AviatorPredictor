@@ -6,22 +6,17 @@ const prices: Record<number, number> = { 1: 2000, 2: 3000, 3: 5000 };
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return json(res, { message: 'Method not allowed' }, 405);
   try { if (!API_KEY) return json(res, { message: 'Payment service is not configured' }, 500); const uid = await requireSession(req); const b: any = body(req); const packageNo = Number(b.package_no); const amount = prices[packageNo]; const p = phone(b.phone); if (!amount || !/^255[67]\d{8}$/.test(p)) return json(res, { message: 'Namba au package si sahihi' }, 400); const users = await sb(`aviator_users?id=eq.${encodeURIComponent(uid)}&select=id,phone,full_name,current_package&limit=1`); const user = users?.[0]; if (!user) return json(res, { message: 'Session expired' }, 401); if (Number(user.current_package) !== packageNo) return json(res, { message: `Unaendelea na hatua ${user.current_package}` }, 409);
-    // FimiPay validates the payer/payout details using these field names.
-// Keep the method configurable because the enabled mobile-money rail is
-// account-specific in FimiPay. For this Tanzania project the default is M-PESA.
-const method = String(process.env.FIMIPAY_METHOD || 'mpesa').trim();
-const accountName = String(user.full_name || process.env.FIMIPAY_ACCOUNT_NAME || 'SmarkSoko').trim();
-const payload = {
-  buyer_name: accountName,
-  buyer_phone: p,
-  amount,
-  currency: 'TZS',
-  method,
-  account_number: p,
-  account_name: accountName,
-  // Kept for compatibility with older FimiPay configurations.
-  payment_method: 'mobile'
-};
+    // FimiPay Create Payment uses the documented payment-collection fields.
+    // Do not send payout-only fields such as method/account_number/account_name.
+    // For Tanzania mobile, payment_method=mobile triggers Push USSD.
+    const buyerName = String(user.full_name || process.env.FIMIPAY_ACCOUNT_NAME || 'SmarkSoko').trim();
+    const payload = {
+      buyer_name: buyerName,
+      buyer_phone: p,
+      amount,
+      currency: 'TZS',
+      payment_method: 'mobile'
+    };
     const r = await fetch(CREATE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': 'FimiPay-SDK/1.0', Authorization: `Bearer ${API_KEY}` }, body: JSON.stringify(payload) });
     const raw = await r.text(); let data: any; try { data = JSON.parse(raw); } catch { data = { message: raw }; } if (!r.ok || data?.status === 'error') {
       console.error('Payment create failed', r.status, raw);

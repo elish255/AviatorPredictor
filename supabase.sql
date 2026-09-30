@@ -3,6 +3,7 @@ create extension if not exists pgcrypto;
 
 create table if not exists public.aviator_users (
   id uuid primary key default gen_random_uuid(),
+  full_name text not null,
   phone text not null unique,
   current_package integer not null default 1 check (current_package between 1 and 3),
   last_package integer not null default 0 check (last_package between 0 and 3),

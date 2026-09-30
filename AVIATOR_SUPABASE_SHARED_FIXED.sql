@@ -15,6 +15,7 @@ drop table if exists public.aviator_users cascade;
 
 create table public.aviator_users (
   id uuid primary key default gen_random_uuid(),
+  full_name text not null,
   phone text not null unique,
   current_package integer not null default 1
     check (current_package between 1 and 3),
