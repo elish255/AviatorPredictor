@@ -4,6 +4,7 @@ export type VercelRequest = {
   method?: string;
   body?: unknown;
   headers?: Record<string, string | string[] | undefined>;
+  query?: Record<string, string | string[] | undefined>;
 };
 
 export type VercelResponse = {
@@ -12,26 +13,48 @@ export type VercelResponse = {
   end(body?: string): void;
 };
 
+function env(name: string) {
+  return String(process.env[name] ?? '').trim();
+}
+
 function config() {
-  const url = String(process.env.SUPABASE_URL ?? '').trim().replace(/\/$/, '');
-  const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY ?? '').trim();
-  if (!url || !key) throw new Error('Supabase environment variables are missing');
+  const url = (env('SUPABASE_URL') || env('VITE_SUPABASE_URL')).replace(/\/$/, '');
+  const key = env('SUPABASE_SERVICE_ROLE_KEY') || env('SUPABASE_SECRET_KEY') || env('SUPABASE_SERVICE_KEY');
+
+  if (!url) throw new Error('Supabase URL is missing. Set SUPABASE_URL in Vercel Production environment variables.');
+  if (!key) throw new Error('Supabase server key is missing. Set SUPABASE_SERVICE_ROLE_KEY in Vercel Production environment variables.');
+
   return { url, key };
 }
 
 export async function sb(path: string, init: RequestInit = {}) {
   const { url, key } = config();
-  const headers = new Headers(init.headers);
-  headers.set('apikey', key);
-  headers.set('Authorization', `Bearer ${key}`);
-  headers.set('Content-Type', 'application/json');
-  headers.set('Accept', 'application/json');
-  const r = await fetch(`${url}/rest/v1/${path}`, { ...init, headers });
-  const text = await r.text();
-  let data: any = null;
-  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  if (!r.ok) throw new Error(data?.message || data?.hint || data?.details || `Database request failed (${r.status})`);
-  return data;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const headers = new Headers(init.headers);
+    headers.set('apikey', key);
+    headers.set('Authorization', `Bearer ${key}`);
+    headers.set('Content-Type', 'application/json');
+    headers.set('Accept', 'application/json');
+    const r = await fetch(`${url}/rest/v1/${path}`, { ...init, headers, signal: controller.signal });
+    const text = await r.text();
+    let data: any = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    if (!r.ok) {
+      const message = data?.message || data?.hint || data?.details || data?.error_description || `Database request failed (${r.status})`;
+      const err = new Error(String(message));
+      (err as any).status = r.status;
+      (err as any).code = data?.code;
+      throw err;
+    }
+    return data;
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw new Error('Supabase request timed out after 10 seconds. Check SUPABASE_URL/network.');
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function json(res: VercelResponse, data: any, status = 200) {

@@ -20,8 +20,10 @@ const api = async (url:string, body:unknown) => {
   const headers:Record<string,string>={'Content-Type':'application/json'};
   const token=localStorage.getItem('aviator_session'); if(token) headers['x-session-token']=token;
   const r = await fetch(url,{method:'POST',headers,body:JSON.stringify(body)});
-  const data = await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error(data.message || 'Request failed');
+  const raw = await r.text();
+  let data:any = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { data = { message: raw }; }
+  if(!r.ok) throw new Error(data.message || data.error || `Request failed (${r.status})`);
   return data;
 };
 const money=(n:number)=>`TZS ${n.toLocaleString('en-TZ')}`;
