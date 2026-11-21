@@ -1,7 +1,7 @@
 declare const process: { env: Record<string, string | undefined> };
 import { sb, json, requireSession, body, type VercelRequest, type VercelResponse } from './_supabase.js';
 
-import { DALIPAY_ORDER_PREFIX, dalipayRequest, dalipayStatus } from './_dalipay.js';
+import { DALIPAY_ORDER_PREFIX, dalipayRequest, dalipayStatus, DalipayError } from './_dalipay.js';
 
 const STATUS_URL = process.env.FIMIPAY_ORDER_STATUS_URL || 'https://fimipay.com/api/v1/payment/order_status';
 const API_KEY = process.env.FIMIPAY_API_KEY || '';
@@ -97,6 +97,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...(nextPackage ? { next_package: nextPackage } : {})
     });
   } catch (e: any) {
+    if (e instanceof DalipayError) {
+      return json(res, {
+        message: `${e.message} [${e.code}; kumbukumbu: ${e.diagnosticId}]`,
+        code: e.code,
+        diagnostic_id: e.diagnosticId
+      }, e.httpStatus);
+    }
     console.error('payment-status failed:', e);
     return json(res, { message: e?.message || 'Imeshindikana kuangalia malipo' }, 400);
   }
