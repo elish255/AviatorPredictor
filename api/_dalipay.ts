@@ -74,7 +74,7 @@ export async function dalipayRequest(path: string, payload?: Record<string, unkn
   let response: Response;
   let result: any;
   try {
-    response = await fetch(`https://dalipay.co.tz/api/v1/collections${path}`, {
+    response = await fetch(`https://app.dalipay.co.tz/api/v1/collections${path}`, {
       method: payload ? 'POST' : 'GET',
       headers: {
         'Content-Type': 'application/json',

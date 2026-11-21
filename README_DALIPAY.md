@@ -11,7 +11,7 @@ In the Vercel project's **Environment Variables**, add these as **Secret** varia
 
 Use a matching **production** key pair for Production. Use a separate **test** key pair for Preview/Development. Dalipay selects the environment from the keys; production keys initiate real mobile money prompts. Never paste keys in chat, source, PRs, or logs. Missing keys disable new checkout requests with a configuration error. Redeploy after setting variables.
 
-The server uses `https://dalipay.co.tz/api/v1/collections`, with `X-Public-Key` and `X-Secret-Key` headers. It sends the local-format phone, explicit provider, server-priced amount, TZS currency, customer name and a unique external ID (30 characters). Keep the matching Dalipay account authorized for this business.
+The server uses `https://app.dalipay.co.tz/api/v1/collections`, with `X-Public-Key` and `X-Secret-Key` headers. It sends the local-format phone, explicit provider, server-priced amount, TZS currency, customer name and a unique external ID (30 characters). Keep the matching Dalipay account authorized for this business.
 
 ## Confirmation and migration
 
