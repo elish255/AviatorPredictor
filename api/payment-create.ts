@@ -1,33 +1,46 @@
-declare const process: { env: Record<string, string | undefined> };
 import { sb, json, phone, requireSession, body, type VercelRequest, type VercelResponse } from './_supabase.js';
-const CREATE_URL = process.env.FIMIPAY_CREATE_PAYMENT_URL || 'https://fimipay.com/api/v1/payment/create_order';
-const API_KEY = process.env.FIMIPAY_API_KEY || '';
+import { DALIPAY_ORDER_PREFIX, DALIPAY_PROVIDERS, dalipayConfigured, dalipayExternalId, dalipayRequest } from './_dalipay.js';
+
 const prices: Record<number, number> = { 1: 2000, 2: 3000, 3: 5000 };
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return json(res, { message: 'Method not allowed' }, 405);
-  try { if (!API_KEY) return json(res, { message: 'Payment service is not configured' }, 500); const uid = await requireSession(req); const b: any = body(req); const packageNo = Number(b.package_no); const amount = prices[packageNo]; const p = phone(b.phone); if (!amount || !/^255[67]\d{8}$/.test(p)) return json(res, { message: 'Namba au package si sahihi' }, 400); const users = await sb(`aviator_users?id=eq.${encodeURIComponent(uid)}&select=id,phone,full_name,current_package&limit=1`); const user = users?.[0]; if (!user) return json(res, { message: 'Session expired' }, 401); if (Number(user.current_package) !== packageNo) return json(res, { message: `Unaendelea na hatua ${user.current_package}` }, 409);
-    // FimiPay Create Payment uses the documented payment-collection fields.
-    // Do not send payout-only fields such as method/account_number/account_name.
-    // For Tanzania mobile, payment_method=mobile triggers Push USSD.
-    const buyerName = String(user.full_name || process.env.FIMIPAY_ACCOUNT_NAME || 'SmarkSoko').trim();
-    const payload = {
-      buyer_name: buyerName,
-      buyer_phone: p,
+  try {
+    if (!dalipayConfigured()) return json(res, { message: 'Dalipay haijawekwa tayari' }, 503);
+    const uid = await requireSession(req);
+    const b = body(req);
+    const packageNo = Number(b.package_no);
+    const amount = prices[packageNo];
+    const p = phone(b.phone);
+    if (!amount || !/^255[67]\d{8}$/.test(p)) return json(res, { message: 'Namba au package si sahihi' }, 400);
+    if (!DALIPAY_PROVIDERS.includes(b.provider)) return json(res, { message: 'Chagua mtandao sahihi wa malipo' }, 400);
+
+    const users = await sb(`aviator_users?id=eq.${encodeURIComponent(uid)}&select=id,phone,full_name,current_package&limit=1`);
+    const user = users?.[0];
+    if (!user) return json(res, { message: 'Session expired' }, 401);
+    if (Number(user.current_package) !== packageNo) return json(res, { message: `Unaendelea na hatua ${user.current_package}` }, 409);
+
+    const data = await dalipayRequest('', {
+      account_number: `0${p.slice(3)}`,
       amount,
       currency: 'TZS',
-      payment_method: 'mobile'
-    };
-    const r = await fetch(CREATE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': 'FimiPay-SDK/1.0', Authorization: `Bearer ${API_KEY}` }, body: JSON.stringify(payload) });
-    const raw = await r.text(); let data: any; try { data = JSON.parse(raw); } catch { data = { message: raw }; } if (!r.ok || data?.status === 'error') {
-      console.error('Payment create failed', r.status, raw);
-      const fieldErrors = data?.errors && typeof data.errors === 'object'
-        ? Object.entries(data.errors).flatMap(([field, msgs]: any) => (Array.isArray(msgs) ? msgs : [msgs]).map((m: any) => `${field}: ${m}`))
-        : [];
-      return json(res, {
-        message: data?.message || 'Imeshindikana kuanzisha malipo',
-        errors: fieldErrors
-      }, 400);
+      provider: b.provider,
+      external_id: dalipayExternalId(),
+      customer_name: String(user.full_name || 'Customer').trim()
+    });
+    if (typeof data.uuid !== 'string' || !/^[0-9a-f-]{36}$/i.test(data.uuid)) {
+      return json(res, { message: 'Dalipay haikutoa kumbukumbu sahihi ya malipo' }, 502);
     }
-    const d = data?.data || {}; const orderId = d.order_id || data?.order_id; if (!orderId) return json(res, { message: 'Payment request haikutoa order' }, 502); await sb('aviator_payments', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ user_id: uid, package_no: packageNo, amount, status: String(d.payment_status || 'PENDING').toUpperCase(), order_id: orderId, phone: p }) }); return json(res, { order_id: orderId, payment_status: String(d.payment_status || 'PENDING').toUpperCase() });
-  } catch (e: any) { console.error(e); return json(res, { message: e?.message || 'Imeshindikana kuanzisha malipo' }, 400); }
+    // Keep the existing schema; the prefix distinguishes new Dalipay orders
+    // from older FimiPay orders that may still need to finish polling.
+    const orderId = `${DALIPAY_ORDER_PREFIX}${data.uuid}`;
+    await sb('aviator_payments', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ user_id: uid, package_no: packageNo, amount, status: 'PENDING', order_id: orderId, phone: p })
+    });
+    return json(res, { order_id: orderId, payment_status: 'PENDING' });
+  } catch (e: any) {
+    return json(res, { message: e?.message || 'Imeshindikana kuanzisha malipo' }, 400);
+  }
 }
