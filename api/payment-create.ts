@@ -1,5 +1,5 @@
 import { sb, json, phone, requireSession, body, type VercelRequest, type VercelResponse } from './_supabase.js';
-import { DALIPAY_ORDER_PREFIX, DALIPAY_PROVIDERS, dalipayConfigured, dalipayExternalId, dalipayRequest } from './_dalipay.js';
+import { DALIPAY_ORDER_PREFIX, DALIPAY_PROVIDERS, dalipayConfigured, dalipayExternalId, dalipayRequest, DalipayError } from './_dalipay.js';
 
 const prices: Record<number, number> = { 1: 2000, 2: 3000, 3: 5000 };
 
@@ -41,6 +41,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
     return json(res, { order_id: orderId, payment_status: 'PENDING' });
   } catch (e: any) {
+    if (e instanceof DalipayError) {
+      return json(res, {
+        message: `${e.message} [${e.code}; kumbukumbu: ${e.diagnosticId}]`,
+        code: e.code,
+        diagnostic_id: e.diagnosticId
+      }, e.httpStatus);
+    }
     return json(res, { message: e?.message || 'Imeshindikana kuanzisha malipo' }, 400);
   }
 }
