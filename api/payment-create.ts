@@ -1,7 +1,7 @@
 import { sb, json, phone, requireSession, body, type VercelRequest, type VercelResponse } from './_supabase.js';
 import { DALIPAY_ORDER_PREFIX, DALIPAY_PROVIDERS, dalipayConfigured, dalipayExternalId, dalipayRequest, DalipayError } from './_dalipay.js';
 
-const prices: Record<number, number> = { 1: 2000, 2: 3000, 3: 5000 };
+const prices: Record<number, number> = { 1: 5000, 2: 8000, 3: 12000 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return json(res, { message: 'Method not allowed' }, 405);
