@@ -66,7 +66,7 @@ export function normalizeTanzaniaPhone(input: string): string {
 }
 
 export function packageAmount(pkg: number): number {
-  return pkg === 1 ? 2000 : pkg === 2 ? 3000 : pkg === 3 ? 5000 : 0;
+  return pkg === 1 ? 5000 : pkg === 2 ? 8000 : pkg === 3 ? 12000 : 0;
 }
 
 export function packageRedirect(pkg: number): string {

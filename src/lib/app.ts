@@ -6,9 +6,9 @@ const SITE_KEY = 'aviator_site';
 const IMAGE_KEY = 'aviator_site_image';
 
 export const packages = {
-  1: { name: 'APP ID PAYMENT', title: 'LIPIA ACCESS', amount: 2000, description: 'Siku 7 Bure', features: ['Full Predictor', 'Live Odds'] },
-  2: { name: 'VPN SETUP PAYMENT', title: 'VPN ACCESS', amount: 3000, description: 'LIPIA VPN CONFIGURATIONS', features: ['Live Odds', 'Matumizi Bila Kikomo'] },
-  3: { name: 'CONNECT APP PAYMENT', title: '🏆 CONNECT ACCOUNT', amount: 5000, description: 'Full Access', features: ['Full Account Linking', 'Live Odds', 'VIP Support'] },
+  1: { name: 'APP ID PAYMENT', title: 'LIPIA ACCESS', amount: 5000, description: 'Siku 7 Bure', features: ['Full Predictor', 'Live Odds'] },
+  2: { name: 'VPN SETUP PAYMENT', title: 'VPN ACCESS', amount: 8000, description: 'LIPIA VPN CONFIGURATIONS', features: ['Live Odds', 'Matumizi Bila Kikomo'] },
+  3: { name: 'CONNECT APP PAYMENT', title: '🏆 CONNECT ACCOUNT', amount: 12000, description: 'Full Access', features: ['Full Account Linking', 'Live Odds', 'VIP Support'] },
 } as const;
 
 export function setUser(user: User) {
