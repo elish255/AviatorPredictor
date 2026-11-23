@@ -17,6 +17,11 @@ export function dalipayStatus(value: unknown) {
     case 'success': return 'SUCCESS';
     case 'failed': return 'FAILED';
     case 'processing': return 'PENDING';
+    case 'cancel':
+    case 'canceled':
+    case 'cancelled':
+    case 'usercancelled':
+    case 'user_cancelled': return 'CANCELLED';
     default: throw new Error('Dalipay imerudisha hali ya malipo isiyotambulika');
   }
 }
